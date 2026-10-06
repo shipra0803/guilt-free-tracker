@@ -1,0 +1,62 @@
+:root {
+  /* --- Palette: warm, calm, "guilt-free" — earth tones instead of alarm colors --- */
+  --color-bg: #f6f1e7;
+  --color-bg-soft: #efe8d8;
+  --color-card: #fffdf8;
+  --color-ink: #2a2419;
+  --color-ink-soft: #776f5e;
+  --color-ink-faint: #a89f8b;
+  --color-border: #e3d9c4;
+
+  --color-ahead: #4c7a63;
+  --color-ahead-soft: #e3ede7;
+  --color-onpace: #b9852a;
+  --color-onpace-soft: #f4ead4;
+  --color-behind: #b5533c;
+  --color-behind-soft: #f5e3dd;
+
+  --font-display: "Fraunces", "Iowan Old Style", serif;
+  --font-body: "Work Sans", -apple-system, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(42, 36, 25, 0.04), 0 8px 24px -12px rgba(42, 36, 25, 0.12);
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 9px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg);
+  background-image: radial-gradient(circle at 12% 8%, var(--color-bg-soft) 0%, transparent 45%),
+    radial-gradient(circle at 88% 92%, var(--color-bg-soft) 0%, transparent 40%);
+  background-attachment: fixed;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+::selection {
+  background: var(--color-onpace-soft);
+}
