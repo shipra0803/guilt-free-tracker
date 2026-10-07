@@ -1,0 +1,18 @@
+# Backend (Maven build output, local H2 database, IDE files)
+backend/target/
+backend/data/
+*.mv.db
+*.trace.db
+.idea/
+*.iml
+
+# Frontend (dependencies, build output, local env overrides)
+frontend/node_modules/
+frontend/dist/
+.env.local
+.env.*.local
+
+# Local AI-assistant skills (personal tooling, not part of the app)
+.claude/skills/
+.agents/
+skills-lock.json

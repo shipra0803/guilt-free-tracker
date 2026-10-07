@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatMoney, todayIso } from "../format";
+import { useAction } from "../useAction";
 
 // Dropdown options for pay frequency.
 const PAY_FREQUENCIES = [
@@ -16,6 +17,16 @@ const NEEDS_ANCHOR_DATE = new Set(["BIWEEKLY", "WEEKLY"]);
 // whether to show the "bonus paycheck" callout.
 const USUAL_PAYCHECKS_PER_MONTH = { MONTHLY: 1, SEMI_MONTHLY: 2, BIWEEKLY: 2, WEEKLY: 4 };
 
+// The income request body that both the estimate and save endpoints take, from the raw inputs.
+function toIncome(salary, stateRate, payFrequency, anchorPayDate) {
+  return {
+    yearlySalary: Number(salary),
+    stateTaxRatePercent: Number(stateRate) || 0,
+    payFrequency,
+    anchorPayDate: NEEDS_ANCHOR_DATE.has(payFrequency) ? anchorPayDate : null,
+  };
+}
+
 /**
  * Where the budget actually gets built: salary + taxes -> net income, fixed
  * expenses, and flexible category budgets. The Home page just displays the result
@@ -30,6 +41,7 @@ export default function Settings({
   onEstimateIncome,
   onSaveIncome,
   onAddFixedExpense,
+  onUpdateFixedExpense,
   onDeleteFixedExpense,
   onAddFlexibleCategory,
   onUpdateFlexibleCategory,
@@ -42,147 +54,71 @@ export default function Settings({
   const [anchorPayDate, setAnchorPayDate] = useState(incomeProfile?.anchorPayDate || todayIso());
   const [breakdown, setBreakdown] = useState(null);
   const [estimating, setEstimating] = useState(false);
-  const [savingIncome, setSavingIncome] = useState(false);
+  const [estimateError, setEstimateError] = useState(null);
 
-  // Add-fixed-expense form state.
-  const [fixedName, setFixedName] = useState("");
-  const [fixedAmount, setFixedAmount] = useState("");
-  const [addingFixed, setAddingFixed] = useState(false);
-
-  // Add-flexible-category form state.
-  const [categoryName, setCategoryName] = useState("");
-  const [categoryBudget, setCategoryBudget] = useState("");
-  const [addingCategory, setAddingCategory] = useState(false);
-  const [categoryError, setCategoryError] = useState(null);
-
-  // Edit-flexible-category (inline) form state.
+  // One busy/error pair per card; the row being edited inline is tracked by id.
+  const [savingIncome, incomeError, runIncome] = useAction();
+  const [fixedBusy, fixedError, runFixed] = useAction();
+  const [categoryBusy, categoryError, runCategory] = useAction();
+  const [editingFixedId, setEditingFixedId] = useState(null);
   const [editingCategoryId, setEditingCategoryId] = useState(null);
-  const [editName, setEditName] = useState("");
-  const [editBudget, setEditBudget] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
 
-  // Live preview: re-estimate whenever salary or state rate changes, debounced so
+  // Live preview: re-estimate whenever an income input changes, debounced so
   // we're not hitting the API on every keystroke.
   useEffect(() => {
-    const parsedSalary = Number(salary);
-    if (!parsedSalary || parsedSalary <= 0) {
+    const income = toIncome(salary, stateRate, payFrequency, anchorPayDate);
+    if (!(income.yearlySalary > 0)) {
       setBreakdown(null);
       return;
     }
-    const parsedRate = Number(stateRate) || 0;
-    const anchor = NEEDS_ANCHOR_DATE.has(payFrequency) ? anchorPayDate : null;
-
     setEstimating(true);
+    setEstimateError(null);
     const timeout = setTimeout(() => {
-      onEstimateIncome(parsedSalary, parsedRate, payFrequency, anchor)
+      onEstimateIncome(income)
         .then(setBreakdown)
-        .catch((err) => console.error(err))
+        .catch((err) => {
+          console.error(err);
+          setBreakdown(null);
+          setEstimateError("Couldn't calculate taxes for those numbers. Check them and try again.");
+        })
         .finally(() => setEstimating(false));
     }, 400);
 
     return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [salary, stateRate, payFrequency, anchorPayDate]);
+  }, [salary, stateRate, payFrequency, anchorPayDate, onEstimateIncome]);
 
-  // Sum of all fixed expenses' monthly amounts, for the hint line under that section.
-  const fixedTotal = fixedExpenses.reduce((sum, e) => sum + Number(e.monthlyAmount), 0);
-
-  // Persists the income profile using the currently previewed values.
-  async function handleSaveIncome() {
-    const parsedSalary = Number(salary);
-    if (!parsedSalary || parsedSalary <= 0) return;
-    const anchor = NEEDS_ANCHOR_DATE.has(payFrequency) ? anchorPayDate : null;
-    setSavingIncome(true);
-    try {
-      await onSaveIncome(parsedSalary, Number(stateRate) || 0, payFrequency, anchor);
-    } finally {
-      setSavingIncome(false);
-    }
+  function deleteFixed(expense) {
+    if (!window.confirm(`Remove "${expense.name}" from fixed expenses?`)) return;
+    runFixed(() => onDeleteFixedExpense(expense.id), "Couldn't remove that expense. Try again.");
   }
 
-  // Adds a new fixed expense and resets the form.
-  async function handleAddFixed(event) {
-    event.preventDefault();
-    const parsedAmount = Number(fixedAmount);
-    if (!fixedName.trim() || !parsedAmount || parsedAmount <= 0) return;
-    setAddingFixed(true);
-    try {
-      await onAddFixedExpense(fixedName.trim(), parsedAmount);
-      setFixedName("");
-      setFixedAmount("");
-    } finally {
-      setAddingFixed(false);
-    }
+  async function saveFixed(id, name, amount) {
+    const ok = await runFixed(() => onUpdateFixedExpense(id, name, amount), "Couldn't save that change. Try again.");
+    if (ok) setEditingFixedId(null);
+    return ok;
   }
 
-  // Adds a new flexible category and resets the form.
-  async function handleAddCategory(event) {
-    event.preventDefault();
-    const parsedBudget = Number(categoryBudget);
-    if (!categoryName.trim() || !parsedBudget || parsedBudget <= 0) return;
-    setAddingCategory(true);
-    setCategoryError(null);
-    try {
-      await onAddFlexibleCategory(categoryName.trim(), parsedBudget);
-      setCategoryName("");
-      setCategoryBudget("");
-    } finally {
-      setAddingCategory(false);
-    }
+  function deleteCategory(category) {
+    if (!window.confirm(`Delete the "${category.name}" category?`)) return;
+    runCategory(
+      () => onDeleteFlexibleCategory(category.id),
+      "Can't delete that category - it still has expenses logged against it.",
+    );
   }
 
-  // Deletes a category, surfacing the backend's 409 message if it still has expenses.
-  async function handleDeleteCategory(id) {
-    setCategoryError(null);
-    try {
-      await onDeleteFlexibleCategory(id);
-    } catch (err) {
-      setCategoryError("Can't delete that category - it still has expenses logged against it.");
-      console.error(err);
-    }
+  async function saveCategory(id, name, budget) {
+    const ok = await runCategory(() => onUpdateFlexibleCategory(id, name, budget), "Couldn't save that change. Try again.");
+    if (ok) setEditingCategoryId(null);
+    return ok;
   }
-
-  // Opens the inline edit form for a category, pre-filled with its current values.
-  function startEditingCategory(category) {
-    setCategoryError(null);
-    setEditingCategoryId(category.id);
-    setEditName(category.name);
-    setEditBudget(String(category.monthlyBudget));
-  }
-
-  // Closes the inline edit form without saving.
-  function cancelEditingCategory() {
-    setEditingCategoryId(null);
-  }
-
-  // Saves the inline-edited category.
-  async function handleSaveEditCategory(event, id) {
-    event.preventDefault();
-    const parsedBudget = Number(editBudget);
-    if (!editName.trim() || !parsedBudget || parsedBudget <= 0) return;
-    setSavingEdit(true);
-    setCategoryError(null);
-    try {
-      await onUpdateFlexibleCategory(id, editName.trim(), parsedBudget);
-      setEditingCategoryId(null);
-    } catch (err) {
-      setCategoryError("Couldn't save that change - try again.");
-      console.error(err);
-    } finally {
-      setSavingEdit(false);
-    }
-  }
-
-  // Lookup from category id to its spent/remaining breakdown from the summary payload.
-  const categoryBreakdownById = new Map((summary?.categories || []).map((c) => [c.id, c]));
 
   return (
     <>
       {/* Income & taxes: salary/rate/frequency inputs plus the live tax breakdown preview. */}
       <section className="card">
         <h2 className="card-title">Income &amp; taxes</h2>
-        <div className="expense-form-row">
-          <div className="field field-amount">
+        <div className="income-grid">
+          <div className="field">
             <label htmlFor="yearly-salary">Yearly salary</label>
             <div className="field-amount-input">
               <span aria-hidden="true">$</span>
@@ -197,7 +133,7 @@ export default function Settings({
               />
             </div>
           </div>
-          <div className="field field-amount">
+          <div className="field">
             <label htmlFor="state-rate">State tax rate</label>
             <div className="field-amount-input">
               <input
@@ -212,14 +148,10 @@ export default function Settings({
               <span aria-hidden="true">%</span>
             </div>
           </div>
-        </div>
-
-        <div className="expense-form-row">
-          <div className="field field-description">
+          <div className="field">
             <label htmlFor="pay-frequency">Pay frequency</label>
             <select
               id="pay-frequency"
-              className="pay-frequency-select"
               value={payFrequency}
               onChange={(e) => setPayFrequency(e.target.value)}
             >
@@ -231,7 +163,7 @@ export default function Settings({
             </select>
           </div>
           {NEEDS_ANCHOR_DATE.has(payFrequency) && (
-            <div className="field field-date">
+            <div className="field">
               <label htmlFor="anchor-pay-date">A recent payday</label>
               <input
                 id="anchor-pay-date"
@@ -242,50 +174,45 @@ export default function Settings({
             </div>
           )}
         </div>
-        <p className="budget-setup-hint">
-          {NEEDS_ANCHOR_DATE.has(payFrequency) &&
-            " "}
-        </p>
 
-        {estimating && <p className="budget-setup-hint">Calculating…</p>}
+        {estimating && !breakdown && <p className="budget-setup-hint">Calculating…</p>}
+        {!salary && <p className="budget-setup-hint">Enter your yearly salary to see your take-home pay.</p>}
+        {(estimateError || incomeError) && <p className="field-error" role="alert">{estimateError || incomeError}</p>}
 
-        {breakdown && !estimating && (
-          <div className="tax-breakdown">
-            <div className="tax-breakdown-row">
-              <span>Gross annual</span>
-              <span>{formatMoney(breakdown.grossAnnual)}</span>
-            </div>
-            <div className="tax-breakdown-row">
-              <span>Federal tax</span>
-              <span>-{formatMoney(breakdown.federalTax)}</span>
-            </div>
-            <div className="tax-breakdown-row">
-              <span>FICA (Social Security + Medicare)</span>
-              <span>-{formatMoney(breakdown.ficaTax)}</span>
-            </div>
-            <div className="tax-breakdown-row">
-              <span>State tax</span>
-              <span>-{formatMoney(breakdown.stateTax)}</span>
-            </div>
-            <div className="tax-breakdown-row">
-              <span>Net annual</span>
-              <span>{formatMoney(breakdown.netAnnual)}</span>
-            </div>
-            <div className="tax-breakdown-row">
-              <span>Average monthly (net ÷ 12)</span>
-              <span>{formatMoney(breakdown.netMonthlyAverage)}</span>
-            </div>
+        {/* Stays on screen (dimmed) while recalculating so the card doesn't jump. */}
+        {breakdown && (
+          <div className={`tax-breakdown ${estimating ? "is-loading" : ""}`} aria-busy={estimating}>
+            <BreakdownRows
+              rows={[
+                ["Gross annual", formatMoney(breakdown.grossAnnual)],
+                ["Federal tax", `−${formatMoney(breakdown.federalTax)}`],
+                ["FICA (Social Security + Medicare)", `−${formatMoney(breakdown.ficaTax)}`],
+                ["State tax", `−${formatMoney(breakdown.stateTax)}`],
+                ["Net annual", formatMoney(breakdown.netAnnual)],
+                ["Average monthly (net ÷ 12)", formatMoney(breakdown.netMonthlyAverage)],
+              ]}
+            />
             <div className="tax-breakdown-row tax-breakdown-total">
               <span>
                 This month ({breakdown.paychecksThisMonth} paycheck{breakdown.paychecksThisMonth === 1 ? "" : "s"})
-                {breakdown.paychecksThisMonth > USUAL_PAYCHECKS_PER_MONTH[payFrequency] && " — bonus paycheck!"}
+                {breakdown.paychecksThisMonth > USUAL_PAYCHECKS_PER_MONTH[payFrequency] && " (bonus paycheck)"}
               </span>
               <span>{formatMoney(breakdown.netThisMonth)}</span>
             </div>
           </div>
         )}
 
-        <button type="button" className="btn-primary" onClick={handleSaveIncome} disabled={savingIncome || !breakdown}>
+        <button
+          type="button"
+          className="btn-primary"
+          onClick={() =>
+            runIncome(
+              () => onSaveIncome(toIncome(salary, stateRate, payFrequency, anchorPayDate)),
+              "Couldn't save your income. Try again.",
+            )
+          }
+          disabled={savingIncome || !breakdown}
+        >
           {savingIncome ? "Saving…" : "Save income"}
         </button>
       </section>
@@ -293,67 +220,65 @@ export default function Settings({
       {/* Fixed expenses: recurring costs list plus the add form. */}
       <section className="card">
         <h2 className="card-title">Fixed expenses</h2>
-        <p className="budget-setup-hint">Rent, utilities, car payment — costs you don't actively decide about each month.</p>
+        <p className="budget-setup-hint">Rent, utilities, car payment: costs you don't actively decide about each month.</p>
         {fixedExpenses.length > 0 && (
           <ul className="expense-list">
-            {fixedExpenses.map((expense) => (
-              <li key={expense.id} className="expense-row">
-                <div className="expense-row-main">
-                  <span className="expense-description">{expense.name}</span>
-                </div>
-                <div className="expense-row-end">
-                  <span className="expense-amount">{formatMoney(expense.monthlyAmount)}</span>
-                  <button
-                    type="button"
-                    className="expense-delete"
-                    aria-label={`Remove ${expense.name}`}
-                    onClick={() => onDeleteFixedExpense(expense.id)}
+            {fixedExpenses.map((expense) =>
+              // Inline edit form, shown instead of the row while editing (same as categories below).
+              editingFixedId === expense.id ? (
+                <li key={expense.id} className="expense-row">
+                  <NameAmountForm
+                    id={`edit-fixed-${expense.id}`}
+                    amountLabel="Monthly amount"
+                    initial={{ name: expense.name, amount: expense.monthlyAmount }}
+                    busy={fixedBusy}
+                    submitLabel={fixedBusy ? "Saving…" : "Save"}
+                    onSubmit={(name, amount) => saveFixed(expense.id, name, amount)}
                   >
-                    ×
-                  </button>
-                </div>
-              </li>
-            ))}
+                    <button type="button" className="btn-text" onClick={() => setEditingFixedId(null)}>
+                      Cancel
+                    </button>
+                  </NameAmountForm>
+                </li>
+              ) : (
+                <li key={expense.id} className="expense-row">
+                  <div className="expense-row-main">
+                    <span className="expense-description">{expense.name}</span>
+                  </div>
+                  <div className="expense-row-end">
+                    <span className="expense-amount">{formatMoney(expense.monthlyAmount)}</span>
+                    <button type="button" className="btn-text" onClick={() => setEditingFixedId(expense.id)}>
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="expense-delete"
+                      aria-label={`Remove ${expense.name}`}
+                      onClick={() => deleteFixed(expense)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ),
+            )}
           </ul>
         )}
-        <form className="expense-form-row" onSubmit={handleAddFixed}>
-          <div className="field field-description">
-            <label htmlFor="fixed-name">Name</label>
-            <input
-              id="fixed-name"
-              type="text"
-              placeholder="Rent, utilities, car payment…"
-              value={fixedName}
-              onChange={(e) => setFixedName(e.target.value)}
-            />
-          </div>
-          <div className="field field-amount">
-            <label htmlFor="fixed-amount">Monthly amount</label>
-            <div className="field-amount-input">
-              <span aria-hidden="true">$</span>
-              <input
-                id="fixed-amount"
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
-                value={fixedAmount}
-                onChange={(e) => setFixedAmount(e.target.value)}
-              />
-            </div>
-          </div>
-          <button type="submit" className="btn-secondary" disabled={addingFixed}>
-            {addingFixed ? "Adding…" : "Add"}
-          </button>
-        </form>
-        <p className="budget-setup-hint">Total fixed expenses: {formatMoney(fixedTotal)}</p>
+        <NameAmountForm
+          id="fixed"
+          amountLabel="Monthly amount"
+          placeholder="Rent, utilities, car payment…"
+          busy={fixedBusy}
+          submitLabel={fixedBusy ? "Adding…" : "Add"}
+          onSubmit={(name, amount) => runFixed(() => onAddFixedExpense(name, amount), "Couldn't add that expense. Try again.")}
+        />
+        {fixedError && <p className="field-error" role="alert">{fixedError}</p>}
+        <p className="budget-setup-hint">Total fixed expenses: {formatMoney(summary?.fixedTotal)}</p>
       </section>
 
       {/* Flexible categories: budget/spent progress per category, inline edit, and add form. */}
       <section className="card">
         <h2 className="card-title">Flexible categories</h2>
-        <p className="budget-setup-hint">
-        </p>
         {flexibleCategories.length > 0 && (
           <ul className="category-list">
             {flexibleCategories.map((category) => {
@@ -361,47 +286,26 @@ export default function Settings({
               if (editingCategoryId === category.id) {
                 return (
                   <li key={category.id} className="category-row">
-                    <form className="expense-form-row" onSubmit={(e) => handleSaveEditCategory(e, category.id)}>
-                      <div className="field field-description">
-                        <label htmlFor={`edit-name-${category.id}`}>Name</label>
-                        <input
-                          id={`edit-name-${category.id}`}
-                          type="text"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          autoFocus
-                        />
-                      </div>
-                      <div className="field field-amount">
-                        <label htmlFor={`edit-budget-${category.id}`}>Monthly budget</label>
-                        <div className="field-amount-input">
-                          <span aria-hidden="true">$</span>
-                          <input
-                            id={`edit-budget-${category.id}`}
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={editBudget}
-                            onChange={(e) => setEditBudget(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <button type="submit" className="btn-secondary" disabled={savingEdit}>
-                        {savingEdit ? "Saving…" : "Save"}
-                      </button>
-                      <button type="button" className="btn-text" onClick={cancelEditingCategory}>
+                    <NameAmountForm
+                      id={`edit-${category.id}`}
+                      amountLabel="Monthly budget"
+                      initial={{ name: category.name, amount: category.monthlyBudget }}
+                      busy={categoryBusy}
+                      submitLabel={categoryBusy ? "Saving…" : "Save"}
+                      onSubmit={(name, budget) => saveCategory(category.id, name, budget)}
+                    >
+                      <button type="button" className="btn-text" onClick={() => setEditingCategoryId(null)}>
                         Cancel
                       </button>
-                    </form>
+                    </NameAmountForm>
                   </li>
                 );
               }
 
               // Display row: name, remaining amount, progress bar, spent/budgeted line.
-              const breakdown = categoryBreakdownById.get(category.id);
-              const spent = Number(breakdown?.spentThisMonth ?? 0);
+              const spent = Number(category.spentThisMonth);
               const budget = Number(category.monthlyBudget);
-              const remaining = Number(breakdown?.remaining ?? budget);
+              const remaining = Number(category.remaining);
               const pct = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
               const isOver = remaining < 0;
               return (
@@ -410,21 +314,17 @@ export default function Settings({
                     <span className="expense-description">{category.name}</span>
                     <div className="expense-row-end">
                       <span className={`expense-amount ${isOver ? "is-negative-text" : ""}`}>
-                        {isOver ? "–" : ""}
+                        {isOver ? "−" : ""}
                         {formatMoney(Math.abs(remaining))} left
                       </span>
-                      <button
-                        type="button"
-                        className="btn-text"
-                        onClick={() => startEditingCategory(category)}
-                      >
+                      <button type="button" className="btn-text" onClick={() => setEditingCategoryId(category.id)}>
                         Edit
                       </button>
                       <button
                         type="button"
                         className="expense-delete"
                         aria-label={`Remove ${category.name}`}
-                        onClick={() => handleDeleteCategory(category.id)}
+                        onClick={() => deleteCategory(category)}
                       >
                         ×
                       </button>
@@ -433,7 +333,7 @@ export default function Settings({
                   <div className="category-progress-track">
                     <div
                       className={`category-progress-fill ${isOver ? "is-over" : ""}`}
-                      style={{ width: `${pct}%` }}
+                      style={{ transform: `scaleX(${pct / 100})` }}
                     />
                   </div>
                   <span className="expense-date">
@@ -444,37 +344,15 @@ export default function Settings({
             })}
           </ul>
         )}
-        {categoryError && <p className="field-error">{categoryError}</p>}
-        <form className="expense-form-row" onSubmit={handleAddCategory}>
-          <div className="field field-description">
-            <label htmlFor="category-name">Name</label>
-            <input
-              id="category-name"
-              type="text"
-              placeholder="Food, entertainment, personal…"
-              value={categoryName}
-              onChange={(e) => setCategoryName(e.target.value)}
-            />
-          </div>
-          <div className="field field-amount">
-            <label htmlFor="category-budget">Monthly budget</label>
-            <div className="field-amount-input">
-              <span aria-hidden="true">$</span>
-              <input
-                id="category-budget"
-                type="number"
-                min="0.01"
-                step="0.01"
-                placeholder="0.00"
-                value={categoryBudget}
-                onChange={(e) => setCategoryBudget(e.target.value)}
-              />
-            </div>
-          </div>
-          <button type="submit" className="btn-secondary" disabled={addingCategory}>
-            {addingCategory ? "Adding…" : "Add"}
-          </button>
-        </form>
+        {categoryError && <p className="field-error" role="alert">{categoryError}</p>}
+        <NameAmountForm
+          id="category"
+          amountLabel="Monthly budget"
+          placeholder="Food, entertainment, personal…"
+          busy={categoryBusy}
+          submitLabel={categoryBusy ? "Adding…" : "Add"}
+          onSubmit={(name, budget) => runCategory(() => onAddFlexibleCategory(name, budget), "Couldn't add that category. Try again.")}
+        />
       </section>
 
       {/* Read-only recap: how net income flows through fixed and flexible into savings. */}
@@ -482,22 +360,14 @@ export default function Settings({
         <section className="card">
           <h2 className="card-title">Where it all goes</h2>
           <div className="tax-breakdown">
-            <div className="tax-breakdown-row">
-              <span>Net income this month</span>
-              <span>{formatMoney(summary.netThisMonth)}</span>
-            </div>
-            <div className="tax-breakdown-row">
-              <span>Fixed expenses</span>
-              <span>-{formatMoney(summary.fixedTotal)}</span>
-            </div>
-            <div className="tax-breakdown-row">
-              <span>Remaining after fixed</span>
-              <span>{formatMoney(summary.remainingAfterFixed)}</span>
-            </div>
-            <div className="tax-breakdown-row">
-              <span>Flexible allocated</span>
-              <span>-{formatMoney(summary.flexibleAllocated)}</span>
-            </div>
+            <BreakdownRows
+              rows={[
+                ["Net income this month", formatMoney(summary.netThisMonth)],
+                ["Fixed expenses", `−${formatMoney(summary.fixedTotal)}`],
+                ["Remaining after fixed", formatMoney(summary.remainingAfterFixed)],
+                ["Flexible allocated", `−${formatMoney(summary.flexibleAllocated)}`],
+              ]}
+            />
             <div className="tax-breakdown-row tax-breakdown-total">
               <span>Extra savings</span>
               <span>{formatMoney(summary.extraSavings)}</span>
@@ -507,4 +377,63 @@ export default function Settings({
       )}
     </>
   );
+}
+
+// Name + monthly-amount form: adding fixed expenses, adding and editing categories.
+// Uncontrolled - values are read on submit, and the form resets when onSubmit resolves true.
+function NameAmountForm({ id, amountLabel, placeholder, initial, busy, submitLabel, onSubmit, children }) {
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    if (await onSubmit(data.get("name").trim(), Number(data.get("amount")))) form.reset();
+  }
+
+  return (
+    <form className="expense-form-row" onSubmit={handleSubmit}>
+      <div className="field field-description">
+        <label htmlFor={`${id}-name`}>Name</label>
+        <input
+          id={`${id}-name`}
+          name="name"
+          type="text"
+          required
+          pattern=".*\S.*"
+          placeholder={placeholder}
+          defaultValue={initial?.name}
+          autoFocus={Boolean(initial)}
+        />
+      </div>
+      <div className="field field-amount">
+        <label htmlFor={`${id}-amount`}>{amountLabel}</label>
+        <div className="field-amount-input">
+          <span aria-hidden="true">$</span>
+          <input
+            id={`${id}-amount`}
+            name="amount"
+            type="number"
+            required
+            min="0.01"
+            step="0.01"
+            placeholder="0.00"
+            defaultValue={initial?.amount}
+          />
+        </div>
+      </div>
+      <button type="submit" className="btn-secondary" disabled={busy}>
+        {submitLabel}
+      </button>
+      {children}
+    </form>
+  );
+}
+
+// Plain label/value rows inside a .tax-breakdown block.
+function BreakdownRows({ rows }) {
+  return rows.map(([label, value]) => (
+    <div key={label} className="tax-breakdown-row">
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  ));
 }

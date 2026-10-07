@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 
 // Estimates take-home pay from a gross yearly salary (federal brackets, FICA, flat state rate).
 @Service
@@ -33,13 +34,6 @@ public class TaxCalculationService {
 
     private static final BigDecimal MEDICARE_RATE = new BigDecimal("0.0145");
 
-    private final PayScheduleService payScheduleService;
-
-    // Injects the service used to figure out paycheck counts per month.
-    public TaxCalculationService(PayScheduleService payScheduleService) {
-        this.payScheduleService = payScheduleService;
-    }
-
     // Estimates the tax breakdown for the current calendar month.
     public TaxBreakdown estimate(BigDecimal grossAnnual, BigDecimal stateTaxRatePercent,
                                   PayFrequency payFrequency, LocalDate anchorPayDate) {
@@ -58,19 +52,48 @@ public class TaxCalculationService {
         BigDecimal netAnnual = grossAnnual.subtract(federalTax).subtract(ficaTax).subtract(stateTax);
         BigDecimal netMonthlyAverage = netAnnual.divide(BigDecimal.valueOf(12), 2, RoundingMode.HALF_UP);
 
-        int paychecksPerYear = payScheduleService.paychecksPerYear(payFrequency);
-        BigDecimal netPerPaycheck = netAnnual.divide(BigDecimal.valueOf(paychecksPerYear), 2, RoundingMode.HALF_UP);
+        BigDecimal netPerPaycheck = netAnnual.divide(BigDecimal.valueOf(paychecksPerYear(payFrequency)), 2, RoundingMode.HALF_UP);
 
         // Falls back to today if no anchor was given; safe since MONTHLY/SEMI_MONTHLY never use it.
         LocalDate effectiveAnchor = anchorPayDate != null ? anchorPayDate : LocalDate.now();
-        int paychecksThisMonth = payScheduleService.paychecksInMonth(
-                payFrequency, effectiveAnchor, targetMonth);
+        int paychecksThisMonth = paychecksInMonth(payFrequency, effectiveAnchor, targetMonth);
         BigDecimal netThisMonth = netPerPaycheck.multiply(BigDecimal.valueOf(paychecksThisMonth))
                 .setScale(2, RoundingMode.HALF_UP);
 
         return new TaxBreakdown(
                 round(grossAnnual), round(federalTax), round(ficaTax), round(stateTax),
                 round(netAnnual), round(netMonthlyAverage), netThisMonth, paychecksThisMonth);
+    }
+
+    // How many paychecks a year for this frequency.
+    private static int paychecksPerYear(PayFrequency frequency) {
+        return switch (frequency) {
+            case MONTHLY -> 12;
+            case SEMI_MONTHLY -> 24;
+            case BIWEEKLY -> 26;
+            case WEEKLY -> 52;
+        };
+    }
+
+    // How many paychecks land within the given calendar month.
+    private static int paychecksInMonth(PayFrequency frequency, LocalDate anchorPayDate, YearMonth month) {
+        return switch (frequency) {
+            case MONTHLY -> 1;
+            case SEMI_MONTHLY -> 2;
+            case BIWEEKLY -> countPaydaysInMonth(anchorPayDate, month, 14);
+            case WEEKLY -> countPaydaysInMonth(anchorPayDate, month, 7);
+        };
+    }
+
+    // Walks every day in the month and counts days that land exactly on a pay cycle.
+    private static int countPaydaysInMonth(LocalDate anchorPayDate, YearMonth month, int periodDays) {
+        int count = 0;
+        for (LocalDate day = month.atDay(1); !day.isAfter(month.atEndOfMonth()); day = day.plusDays(1)) {
+            if (Math.floorMod(ChronoUnit.DAYS.between(anchorPayDate, day), periodDays) == 0) {
+                count++;
+            }
+        }
+        return count;
     }
 
     // Standard marginal bracket calculation - each dollar taxed at its own bracket's rate.

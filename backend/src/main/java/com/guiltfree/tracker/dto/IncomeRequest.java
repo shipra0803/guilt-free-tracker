@@ -7,56 +7,11 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
-// Request body for POST /api/income/estimate and PUT /api/income.
-public class IncomeRequest {
-
-    // Must be a positive salary.
-    @NotNull
-    @DecimalMin(value = "0.01", message = "yearlySalary must be greater than zero")
-    private BigDecimal yearlySalary;
-
-    // Zero is valid - not every state taxes wages.
-    @NotNull
-    @DecimalMin(value = "0.00", message = "stateTaxRatePercent cannot be negative")
-    private BigDecimal stateTaxRatePercent;
-
-    // Required - drives the paycheck-counting logic.
-    @NotNull
-    private PayFrequency payFrequency;
-
-    // Only meaningful (and only required by the frontend) for BIWEEKLY/WEEKLY.
-    private LocalDate anchorPayDate;
-
-    // Getters/setters used by Jackson to bind incoming JSON.
-    public BigDecimal getYearlySalary() {
-        return yearlySalary;
-    }
-
-    public void setYearlySalary(BigDecimal yearlySalary) {
-        this.yearlySalary = yearlySalary;
-    }
-
-    public BigDecimal getStateTaxRatePercent() {
-        return stateTaxRatePercent;
-    }
-
-    public void setStateTaxRatePercent(BigDecimal stateTaxRatePercent) {
-        this.stateTaxRatePercent = stateTaxRatePercent;
-    }
-
-    public PayFrequency getPayFrequency() {
-        return payFrequency;
-    }
-
-    public void setPayFrequency(PayFrequency payFrequency) {
-        this.payFrequency = payFrequency;
-    }
-
-    public LocalDate getAnchorPayDate() {
-        return anchorPayDate;
-    }
-
-    public void setAnchorPayDate(LocalDate anchorPayDate) {
-        this.anchorPayDate = anchorPayDate;
-    }
+// Request body for POST /api/income/estimate and PUT /api/income. A zero state rate is valid
+// (not every state taxes wages); anchorPayDate only matters for BIWEEKLY/WEEKLY.
+public record IncomeRequest(
+        @NotNull @DecimalMin(value = "0.01", message = "yearlySalary must be greater than zero") BigDecimal yearlySalary,
+        @NotNull @DecimalMin(value = "0.00", message = "stateTaxRatePercent cannot be negative") BigDecimal stateTaxRatePercent,
+        @NotNull PayFrequency payFrequency,
+        LocalDate anchorPayDate) {
 }
