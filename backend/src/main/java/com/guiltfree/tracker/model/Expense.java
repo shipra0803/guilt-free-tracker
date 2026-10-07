@@ -40,7 +40,7 @@ public class Expense {
         this.category = category;
     }
 
-    // Getters/setters used by JPA and the rest of the app to read/write fields.
+    // Getters used by JPA and the rest of the app.
     public Long getId() {
         return id;
     }
@@ -49,31 +49,15 @@ public class Expense {
         return amount;
     }
 
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
     public String getDescription() {
         return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
     }
 
     public LocalDate getDate() {
         return date;
     }
 
-    public void setDate(LocalDate date) {
-        this.date = date;
-    }
-
     public FlexibleCategory getCategory() {
         return category;
-    }
-
-    public void setCategory(FlexibleCategory category) {
-        this.category = category;
     }
 }

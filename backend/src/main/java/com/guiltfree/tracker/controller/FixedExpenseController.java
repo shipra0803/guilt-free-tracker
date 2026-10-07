@@ -2,47 +2,49 @@ package com.guiltfree.tracker.controller;
 
 import com.guiltfree.tracker.dto.FixedExpenseRequest;
 import com.guiltfree.tracker.model.FixedExpense;
-import com.guiltfree.tracker.service.FixedExpenseService;
+import com.guiltfree.tracker.repository.FixedExpenseRepository;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
-// CRUD for fixed monthly expenses (rent, subscriptions, etc.) - delegates to FixedExpenseService.
+// CRUD for fixed monthly expenses (rent, subscriptions, etc.).
 @RestController
 @RequestMapping("/api/fixed-expenses")
 public class FixedExpenseController {
 
-    private final FixedExpenseService fixedExpenseService;
+    private final FixedExpenseRepository fixedExpenseRepository;
 
-    // Injects the service that holds the actual persistence logic.
-    public FixedExpenseController(FixedExpenseService fixedExpenseService) {
-        this.fixedExpenseService = fixedExpenseService;
+    public FixedExpenseController(FixedExpenseRepository fixedExpenseRepository) {
+        this.fixedExpenseRepository = fixedExpenseRepository;
     }
 
-    // Returns all fixed expenses.
     @GetMapping
     public List<FixedExpense> list() {
-        return fixedExpenseService.list();
+        return fixedExpenseRepository.findAll();
     }
 
-    // Adds a new fixed expense.
     @PostMapping
     public FixedExpense add(@Valid @RequestBody FixedExpenseRequest request) {
-        return fixedExpenseService.add(request.getName(), request.getMonthlyAmount());
+        return fixedExpenseRepository.save(new FixedExpense(request.name(), request.monthlyAmount()));
     }
 
-    // Updates an existing fixed expense.
     @PutMapping("/{id}")
     public FixedExpense update(@PathVariable Long id, @Valid @RequestBody FixedExpenseRequest request) {
-        return fixedExpenseService.update(id, request.getName(), request.getMonthlyAmount());
+        FixedExpense expense = fixedExpenseRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No fixed expense with id " + id));
+        expense.setName(request.name());
+        expense.setMonthlyAmount(request.monthlyAmount());
+        return fixedExpenseRepository.save(expense);
     }
 
-    // Deletes a fixed expense; returns 204 so the frontend's fetch wrapper handles it correctly.
+    // Returns 204 so the frontend's fetch wrapper handles it correctly.
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-        fixedExpenseService.delete(id);
+        fixedExpenseRepository.deleteById(id);
         return ResponseEntity.noContent().build();
     }
 }

@@ -32,12 +32,7 @@ public class IncomeProfile {
     protected IncomeProfile() {
     }
 
-    // Convenience constructor defaulting to monthly pay with no anchor date.
-    public IncomeProfile(BigDecimal yearlySalary, BigDecimal stateTaxRatePercent) {
-        this(yearlySalary, stateTaxRatePercent, PayFrequency.MONTHLY, null);
-    }
-
-    // Full constructor used when creating a new profile in code.
+    // Constructor used when creating a new profile in code.
     public IncomeProfile(BigDecimal yearlySalary, BigDecimal stateTaxRatePercent,
                           PayFrequency payFrequency, LocalDate anchorPayDate) {
         this.yearlySalary = yearlySalary;

@@ -7,14 +7,38 @@
   gap: 28px;
 }
 
+/* Login page: one narrow card, full-width fields and button. */
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  text-align: left;
+}
+
+.login-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.login-card input,
+.login-card > .btn-primary {
+  width: 100%;
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .app-shell-center {
-  min-height: 100vh;
+  min-height: 100dvh;
   justify-content: center;
   align-items: center;
   text-align: center;
 }
 
-.loading-text,
 .error-text {
   font-size: 15px;
   color: var(--color-ink-soft);
@@ -32,26 +56,72 @@
 }
 
 .wordmark {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 450;
-  font-size: 22px;
-  letter-spacing: -0.02em;
+  margin: 0;
+  font-weight: 650;
+  font-size: 20px;
+  letter-spacing: -0.035em;
   color: var(--color-ink);
 }
 
 /* ---------- Tab nav ---------- */
 
-.tab-nav {
+/* Nav pill + log out, grouped on the right. stretch makes the button match the nav's height. */
+.header-actions {
   display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+/* Quiet pill in the nav's shape and colours, so it reads as part of the header, not a link. */
+.btn-logout {
+  background: transparent;
+  white-space: nowrap;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn-logout:hover {
+  color: var(--color-ink);
+  border-color: var(--color-ink-faint);
+  background: var(--color-bg-soft);
+}
+
+.tab-nav {
+  /* Equal-width tabs, so the sliding pill below can move by whole tab widths. */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 4px;
+  position: relative;
   background: var(--color-bg-soft);
   border: 1px solid var(--color-border);
   border-radius: 999px;
   padding: 4px;
 }
 
+/* The active-tab pill: one shape behind the tabs that slides to --active (0, 1 or 2, set in App.jsx).
+   translateX % is of the pill's own width, so each step is one tab width plus the 4px gap. */
+.tab-nav::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px - 2 * 4px) / 3);
+  background: var(--color-raised);
+  border-radius: 999px;
+  box-shadow: var(--shadow-card);
+  transform: translateX(calc(var(--active, 0) * (100% + 4px)));
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
 .tab-nav-item {
+  position: relative; /* above the sliding pill */
   background: none;
   border: none;
   border-radius: 999px;
@@ -68,9 +138,7 @@
 }
 
 .tab-nav-item.is-active {
-  background: var(--color-card);
   color: var(--color-ink);
-  box-shadow: var(--shadow-card);
 }
 
 /* ---------- Hero number ---------- */
@@ -91,24 +159,34 @@
 
 .hero-amount {
   margin: 0;
-  font-family: var(--font-display);
-  font-weight: 450;
-  font-size: clamp(64px, 16vw, 108px);
+  font-weight: 600;
+  font-size: clamp(56px, 15vw, 96px);
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.045em;
   color: var(--color-ink);
   font-variant-numeric: tabular-nums;
 }
 
 .hero-amount.is-negative {
-  color: var(--color-behind);
+  color: var(--color-danger);
 }
 
 .hero-negative-note {
   margin: 10px auto 0;
   max-width: 380px;
   font-size: 13px;
-  color: var(--color-behind);
+  color: var(--color-danger);
+}
+
+.hero-daily {
+  margin: 10px auto 0;
+  font-size: 14px;
+  color: var(--color-ink-soft);
+}
+
+.hero-daily strong {
+  color: var(--color-accent);
+  font-weight: 600;
 }
 
 .hero-hint {
@@ -132,16 +210,39 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
   padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Cards (and the expense form inside one) stack their blocks with a single gap;
+   children carry no outer margins. Buttons keep their natural width. */
+.expense-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card > button,
+.expense-form > button {
+  align-self: flex-start;
 }
 
 .card-title {
-  margin: 0 0 16px;
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--color-ink);
 }
 
 /* ---------- Expense form ---------- */
+
+/* Income & taxes: salary | state rate over pay frequency | payday, columns aligned. */
+.income-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 12px;
+}
 
 .expense-form-row {
   display: flex;
@@ -175,20 +276,32 @@
   width: 150px;
 }
 
-.pay-frequency-select {
+/* Native select with the OS arrow replaced by a themed chevron (see --chevron in index.css). */
+select {
+  appearance: none;
+  height: 42px;
   border: 1px solid var(--color-border);
-  background: var(--color-bg);
+  background: var(--color-bg) var(--chevron) no-repeat right 12px center;
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 10px 36px 10px 12px;
   font-size: 14.5px;
+  line-height: normal;
   color: var(--color-ink);
   outline: none;
   width: 100%;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+select:hover {
+  border-color: var(--color-ink-faint);
 }
 
 input[type="text"],
+input[type="password"],
 input[type="number"],
 input[type="date"] {
+  height: 42px;
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   border-radius: var(--radius-sm);
@@ -199,12 +312,15 @@ input[type="date"] {
   transition: border-color 0.15s ease;
 }
 
-input:focus {
-  border-color: var(--color-onpace);
+input:focus,
+select:focus,
+.field-amount-input:focus-within {
+  border-color: var(--color-accent);
 }
 
 .field-amount-input {
   display: flex;
+  height: 42px;
   align-items: center;
   border: 1px solid var(--color-border);
   background: var(--color-bg);
@@ -222,6 +338,7 @@ input:focus {
   background: none;
   padding: 10px 4px 10px 2px;
   width: 100%;
+  height: 100%;
 }
 
 .field-amount-input input:focus {
@@ -238,11 +355,16 @@ input:focus {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
 .btn-primary:hover {
   opacity: 0.85;
+}
+
+.btn-primary:active:not(:disabled),
+.btn-secondary:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn-primary:disabled {
@@ -259,6 +381,16 @@ input:focus {
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.btn-secondary:hover {
+  border-color: var(--color-ink-faint);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .btn-text {
@@ -268,11 +400,17 @@ input:focus {
   font-size: 13px;
   cursor: pointer;
   text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+}
+
+.btn-text:hover {
+  color: var(--color-ink);
 }
 
 .field-error {
-  margin: 12px 0 0;
-  color: var(--color-behind);
+  margin: 0;
+  color: var(--color-danger);
   font-size: 13px;
 }
 
@@ -292,6 +430,11 @@ input:focus {
   justify-content: space-between;
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border);
+}
+
+/* An inline edit form replaces the row contents and should use its full width. */
+.expense-row > form {
+  flex: 1;
 }
 
 .expense-row:last-child {
@@ -333,11 +476,123 @@ input:focus {
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
-  padding: 2px 4px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .expense-delete:hover {
-  color: var(--color-behind);
+  color: var(--color-danger);
+  background: var(--color-bg-soft);
+}
+
+/* ---------- Motion ----------
+   Small, one-shot animations tied to something changing. All of them are switched off
+   under prefers-reduced-motion (see index.css). Only transform and opacity animate. */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0.5;
+    transform: scale(0.96);
+  }
+}
+
+/* Switching tabs: the page's blocks fade up, one after another. */
+.app-main > * {
+  animation: fade-up 0.3s ease-out backwards;
+}
+
+.app-main > :nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.app-main > :nth-child(n + 3) {
+  animation-delay: 100ms;
+}
+
+/* A newly added expense / fixed expense / category row eases in. */
+.expense-row,
+.category-row {
+  animation: fade-up 0.25s ease-out backwards;
+}
+
+/* The hero number re-mounts when its value changes (key in FlexibleRemainingHero). */
+.hero-amount {
+  animation: pop 0.3s ease-out;
+}
+
+/* Bars grow from empty to their value; the "to" state is each bar's own inline transform/height. */
+.category-progress-fill {
+  animation: grow-x 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+.spending-chart-bar {
+  transform-origin: bottom;
+  animation: grow-y 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+}
+
+.field-error,
+.error-text {
+  animation: fade-up 0.2s ease-out;
+}
+
+/* ---------- Loading ---------- */
+
+.skeleton {
+  background: var(--color-bg-soft);
+  border-radius: var(--radius-lg);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-header {
+  height: 36px;
+  border-radius: 999px;
+}
+
+.skeleton-hero {
+  height: 160px;
+  width: 70%;
+  margin: 0 auto;
+}
+
+.skeleton-card {
+  height: 180px;
+}
+
+.skeleton-chart {
+  height: 220px;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
 }
 
 .empty-state {
@@ -368,8 +623,15 @@ input:focus {
 .tax-breakdown-row {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   font-size: 13.5px;
   color: var(--color-ink-soft);
+}
+
+/* Amounts never wrap; long labels wrap instead. */
+.tax-breakdown-row > :last-child {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .tax-breakdown-total {
@@ -382,14 +644,14 @@ input:focus {
 }
 
 .is-negative-text {
-  color: var(--color-behind);
+  color: var(--color-danger);
 }
 
 /* ---------- Flexible categories ---------- */
 
 .category-list {
   list-style: none;
-  margin: 0 0 16px;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -425,13 +687,14 @@ input:focus {
 
 .category-progress-fill {
   height: 100%;
-  background: var(--color-ahead);
+  background: var(--color-accent);
   border-radius: 999px;
-  transition: width 0.2s ease;
+  transform-origin: left;
+  transition: transform 0.2s ease;
 }
 
 .category-progress-fill.is-over {
-  background: var(--color-behind);
+  background: var(--color-danger);
 }
 
 /* ---------- History page ---------- */
@@ -440,7 +703,6 @@ input:focus {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 20px;
 }
 
 .range-picker-item {
@@ -496,7 +758,7 @@ input:focus {
 .spending-chart-bar {
   width: 100%;
   max-width: 22px;
-  background: var(--color-onpace);
+  background: var(--color-accent);
   border-radius: 3px 3px 0 0;
   min-height: 2px;
 }
@@ -539,21 +801,18 @@ input:focus {
 }
 
 .history-summary-value.is-negative-text {
-  color: var(--color-behind);
-}
-
-/* ---------- Footer ---------- */
-
-.app-footer {
-  text-align: center;
-  font-size: 12px;
-  color: var(--color-ink-faint);
-  padding-top: 8px;
+  color: var(--color-danger);
 }
 
 /* ---------- Responsive ---------- */
 
 @media (max-width: 480px) {
+  .tab-nav-item {
+    padding: 7px 12px;
+  }
+  .income-grid {
+    grid-template-columns: 1fr;
+  }
   .expense-form-row {
     flex-direction: column;
     align-items: stretch;

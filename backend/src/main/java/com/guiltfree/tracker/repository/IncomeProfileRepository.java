@@ -3,6 +3,13 @@ package com.guiltfree.tracker.repository;
 import com.guiltfree.tracker.model.IncomeProfile;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-// Data access for the single income profile row - standard CRUD is all that's needed.
+import java.util.Optional;
+
+// Data access for the single income profile row.
 public interface IncomeProfileRepository extends JpaRepository<IncomeProfile, Long> {
+
+    // The one saved profile, if any.
+    default Optional<IncomeProfile> current() {
+        return findAll().stream().findFirst();
+    }
 }

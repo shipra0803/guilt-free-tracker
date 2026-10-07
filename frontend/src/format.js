@@ -16,9 +16,7 @@ export function formatShortDate(isoDate) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-// Returns today's date as "YYYY-MM-DD", used to default date inputs.
+// Returns today's local date as "YYYY-MM-DD" (en-CA formats that way), used to default date inputs.
 export function todayIso() {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  return new Date().toLocaleDateString("en-CA");
 }

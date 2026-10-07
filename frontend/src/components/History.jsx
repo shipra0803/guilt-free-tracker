@@ -61,13 +61,12 @@ export default function History() {
     <section className="card">
       <h2 className="card-title">Spending history</h2>
 
-      <div className="range-picker" role="tablist">
+      <div className="range-picker" role="group" aria-label="Date range">
         {RANGES.map((r) => (
           <button
             key={r.key}
             type="button"
-            role="tab"
-            aria-selected={range === r.key}
+            aria-pressed={range === r.key}
             className={`range-picker-item ${range === r.key ? "is-active" : ""}`}
             onClick={() => setRange(r.key)}
           >
@@ -76,9 +75,12 @@ export default function History() {
         ))}
       </div>
 
-      {loading && <p className="empty-state">Loading history…</p>}
-      {!loading && error && <p className="error-text">{error}</p>}
-      {!loading && !error && data && <HistoryContent data={data} />}
+      {/* Keep the previous range on screen (dimmed) while the next one loads, so nothing jumps. */}
+      <div className={loading ? "is-loading" : ""} aria-busy={loading}>
+        {error && <p className="error-text" role="alert">{error}</p>}
+        {!error && data && <HistoryContent data={data} />}
+        {!error && !data && <div className="skeleton skeleton-chart" />}
+      </div>
     </section>
   );
 }
@@ -93,10 +95,17 @@ function HistoryContent({ data }) {
   // unreadable wall of text; always keep the very first and last labels.
   const labelStep = Math.max(1, Math.ceil(points.length / 7));
 
+  // Screen-reader summary standing in for the bars (role="img" hides them from assistive tech).
+  const peak = points.reduce((a, b) => (Number(b.spent) > Number(a.spent) ? b : a), points[0]);
+  const chartLabel =
+    `Spending from ${pointLabel(points[0].label)} to ${pointLabel(points.at(-1).label)}: ` +
+    `${formatMoney(totalSpent)} total` +
+    (Number(peak.spent) > 0 ? `, highest ${formatMoney(peak.spent)} on ${pointLabel(peak.label)}.` : ".");
+
   return (
     <>
       {/* Bar chart - one bar per point, height scaled to the largest day/month. */}
-      <div className="spending-chart">
+      <div className="spending-chart" role="img" aria-label={chartLabel}>
         {points.map((point, index) => {
           const heightPct = (Number(point.spent) / maxSpent) * 100;
           const showLabel = index % labelStep === 0 || index === points.length - 1;
@@ -121,29 +130,18 @@ function HistoryContent({ data }) {
 
       {/* Range totals grid: income, fixed, spent, total out, and the difference. */}
       <div className="history-summary-grid">
-        <div className="history-summary-item">
-          <span className="history-summary-label">Net income</span>
-          <span className="history-summary-value">{formatMoney(netIncome)}</span>
-        </div>
-        <div className="history-summary-item">
-          <span className="history-summary-label">Fixed</span>
-          <span className="history-summary-value">{formatMoney(fixedTotal)}</span>
-        </div>
-        <div className="history-summary-item">
-          <span className="history-summary-label">Spent</span>
-          <span className="history-summary-value">{formatMoney(totalSpent)}</span>
-        </div>
-        <div className="history-summary-item">
-          <span className="history-summary-label">Total out</span>
-          <span className="history-summary-value">{formatMoney(totalOut)}</span>
-        </div>
-        <div className="history-summary-item">
-          <span className="history-summary-label">Difference</span>
-          <span className={`history-summary-value ${isPositive ? "" : "is-negative-text"}`}>
-            {isPositive ? "+" : "–"}
-            {formatMoney(Math.abs(difference))}
-          </span>
-        </div>
+        {[
+          ["Net income", formatMoney(netIncome)],
+          ["Fixed", formatMoney(fixedTotal)],
+          ["Spent", formatMoney(totalSpent)],
+          ["Total out", formatMoney(totalOut)],
+          ["Difference", `${isPositive ? "+" : "−"}${formatMoney(Math.abs(difference))}`, isPositive ? "" : "is-negative-text"],
+        ].map(([label, value, extraClass = ""]) => (
+          <div key={label} className="history-summary-item">
+            <span className="history-summary-label">{label}</span>
+            <span className={`history-summary-value ${extraClass}`}>{value}</span>
+          </div>
+        ))}
       </div>
 
       {estimated && (
